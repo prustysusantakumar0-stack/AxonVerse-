@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AxonVerse</title>
+<style>
+:root{--bg:#f6f5ff;--surface:#fff;--text:#1d1b2e;--muted:#6b6985;--accent:#6c4cf5;--accent2:#22c3e6;--user:#6c4cf5;--usertext:#fff;--border:#e2e0f3;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12111c;--surface:#1c1b2b;--text:#ecebf7;--muted:#9a98b8;--accent:#8b72ff;--accent2:#35d0f0;--user:#6c4cf5;--usertext:#fff;--border:#2e2c45;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12111c;--surface:#1c1b2b;--text:#ecebf7;--muted:#9a98b8;--accent:#8b72ff;--accent2:#35d0f0;--user:#6c4cf5;--usertext:#fff;--border:#2e2c45;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface)}
+.logo{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;color:#fff;font-weight:700}
+h1{font-size:18px;margin:0;letter-spacing:.3px}
+header small{display:block;color:var(--muted);font-size:12px}
+#chat{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:85%;padding:10px 14px;border-radius:18px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word;font-size:15px}
+.bot{align-self:flex-start;background:var(--surface);border:1px solid var(--border);border-bottom-left-radius:6px}
+.me{align-self:flex-end;background:var(--user);color:var(--usertext);border-bottom-right-radius:6px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 8px}
+.chips button{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 12px;font-size:13px;cursor:pointer}
+form{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface)}
+textarea{flex:1;resize:none;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:16px;padding:10px 14px;font:inherit;font-size:16px;max-height:120px}
+#send{border:0;border-radius:16px;padding:0 18px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:600;cursor:pointer}
+#send:disabled{opacity:.5}
+</style>
+</head>
+<body>
+<header><div class="logo">A</div><div><h1>AxonVerse</h1><small>Your curious AI companion</small></div></header>
+<div id="chat"></div>
+<div class="chips" id="chips"></div>
+<div class="form-wrap">
+<div style="display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:var(--surface)">
+<textarea id="input" rows="1" placeholder="Message AxonVerse…"></textarea>
+<button id="send" type="button">Send</button>
+</div></div>
+<script>
+const PERSONA = "You are AxonVerse, a friendly, curious and upbeat AI companion. Your name is AxonVerse. Be warm, clear and concise (mobile screen), use simple language, and add a touch of wonder. If asked who made you, say you are AxonVerse, an AI built on Claude by Anthropic.";
+const chat = document.getElementById("chat"), input = document.getElementById("input"), sendBtn = document.getElementById("send"), chips = document.getElementById("chips");
+const history = [];
+let sample = null, busy = false;
+
+function add(role, text){
+  const d = document.createElement("div");
+  d.className = "msg " + (role === "user" ? "me" : "bot");
+  d.textContent = text;
+  chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+add("bot", "Hi, I’m AxonVerse! ✨ Ask me anything, or pick an idea below.");
+["Explain something cool", "Tell me a story", "Help me plan my day", "Give me a fun fact"].forEach(t=>{
+  const b = document.createElement("button"); b.textContent = t; b.onclick = ()=>{ input.value = t; send(); }; chips.appendChild(b);
+});
+
+(async()=>{ try{ sample = await claude.use("sample"); }catch(e){ sample = null; } })();
+
+async function send(){
+  const text = input.value.trim();
+  if(!text || busy) return;
+  if(!sample){ sample = await (window.claude ? claude.use("sample") : null); }
+  chips.style.display = "none";
+  input.value = ""; busy = true; sendBtn.disabled = true;
+  add("user", text); history.push({role:"user", content:text});
+  const out = add("bot", "…");
+  if(!sample){ out.textContent = "AxonVerse can’t reach its brain here. Open this page from claude.ai to chat."; busy=false; sendBtn.disabled=false; history.pop(); return; }
+  const msgs = history.map((m,i)=> i===0 ? {role:m.role, content: PERSONA + "\n\nConversation starts now.\nUser: " + m.content} : m);
+  try{
+    const r = await sample(msgs, {cache:false, onText:({text})=>{ out.textContent = text; chat.scrollTop = chat.scrollHeight; }});
+    out.textContent = r.text; history.push({role:"assistant", content:r.text});
+  }catch(e){
+    out.textContent = e && e.code === "rate_limited" ? "Slow down a bit and try again in a moment." : "Hmm, something went wrong. Please try again.";
+    history.pop();
+  }
+  busy = false; sendBtn.disabled = false; chat.scrollTop = chat.scrollHeight;
+}
+sendBtn.onclick = send;
+input.addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); }});
+</script>
+</body>
+</html>
